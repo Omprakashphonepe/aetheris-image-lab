@@ -82,19 +82,26 @@ def generate_artifact(prompt, aspect_ratio, high_detail):
     for attempt in range(max_retries + 1):
         try:
             response = client.models.generate_content(
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                contents=enhanced_prompt,
-                config={
-                    'image_config': {
-                        'aspect_ratio': aspect_ratio
-                    }
-                }
-            )
-            
-            for part in response.candidates[0].content.parts:
-                if part.inline_data:
-                    return part.inline_data.data
-            return None
+                # Configure the API key
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+# Line 85: Initialize the model properly
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+def generate_artifact(prompt, aspect_ratio, high_detail):
+    full_prompt = f"Generate an image of: {prompt}. Aspect ratio {aspect_ratio}."
+    if high_detail:
+        full_prompt += " Hyper-realistic, 8k resolution."
+    
+    try:
+        response = model.generate_content(full_prompt)
+        for part in response.candidates[0].content.parts:
+            if part.inline_data:
+                return part.inline_data.data
+        return None
+    except Exception as e:
+        st.error(f"Error: {e}")
+        return None
             
         except errors.ClientError as e:
             if "429" in str(e) and attempt < max_retries:
