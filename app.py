@@ -1,11 +1,13 @@
 import streamlit as st
-from google import genai # Switch to the new SDK
+from google import genai
+from google.genai import errors
 import base64
 from PIL import Image
 import io
+import time
 
 # --- CONFIGURATION ---
-# Using the new Client-based initialization
+# It is highly recommended to use st.secrets["GEMINI_API_KEY"] for deployment
 API_KEY = "AIzaSyCky2CePCfviPp7DoibQeoX7EhP-Ou721A"
 client = genai.Client(api_key=API_KEY)
 
@@ -75,21 +77,30 @@ def generate_artifact(prompt, aspect_ratio, high_detail):
     {"Include intricate complex internal glass structures." if high_detail else ""}
     """.strip()
 
-    # The new SDK uses a 'config' dictionary that correctly supports 'image_config'
-    response = client.models.generate_content(
-        model='gemini-2.5-flash-image',
-        contents=enhanced_prompt,
-        config={
-            'image_config': {
-                'aspect_ratio': aspect_ratio
-            }
-        }
-    )
-    
-    for part in response.candidates[0].content.parts:
-        if part.inline_data:
-            return part.inline_data.data
-    return None
+    # Retry logic for rate limits
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash-image',
+                contents=enhanced_prompt,
+                config={
+                    'image_config': {
+                        'aspect_ratio': aspect_ratio
+                    }
+                }
+            )
+            
+            for part in response.candidates[0].content.parts:
+                if part.inline_data:
+                    return part.inline_data.data
+            return None
+            
+        except errors.ClientError as e:
+            if "429" in str(e) and attempt < max_retries:
+                time.sleep(5) # Wait 5 seconds before retrying
+                continue
+            raise e
 
 # --- UI LAYOUT ---
 st.sidebar.markdown("<h1 style='color: #00ffff;'>AETHERIS</h1>", unsafe_allow_html=True)
@@ -113,4 +124,8 @@ if prompt := st.chat_input("Describe a mechanical device..."):
                 else:
                     st.error("Neural link interrupted: No image data returned.")
             except Exception as e:
-                st.error(f"Materialization failed: {str(e)}")
+                if "429" in str(e):
+                    st.error("⚠️ **Quota Exhausted:** The Gemini 2.5 Flash Image model has reached its limit for this API key. This model often requires a billing account to be linked in Google AI Studio, even for the free tier.")
+                    st.info("Check your limits at: https://aistudio.google.com/app/plan")
+                else:
+                    st.error(f"Materialization failed: {str(e)}")
