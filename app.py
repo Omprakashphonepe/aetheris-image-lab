@@ -1,14 +1,13 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai # Switch to the new SDK
 import base64
-import time
 from PIL import Image
 import io
 
 # --- CONFIGURATION ---
-# Replace with your actual API Key or set as a Streamlit Secret
-API_KEY = "YOUR_GEMINI_API_KEY" 
-genai.configure(api_key=API_KEY)
+# Using the new Client-based initialization
+API_KEY = "AIzaSyCky2CePCfviPp7DoibQeoX7EhP-Ou721A"
+client = genai.Client(api_key=API_KEY)
 
 st.set_page_config(
     page_title="Aetheris Image Lab",
@@ -68,8 +67,6 @@ st.markdown("""
 
 # --- IMAGE GENERATION LOGIC ---
 def generate_artifact(prompt, aspect_ratio, high_detail):
-    model = genai.GenerativeModel('gemini-2.5-flash-image')
-    
     enhanced_prompt = f"""
     Style: Glassmorphic sci-fi mechanical technology digital art.
     Mood: futuristic, semi-transparent, monochromatic.
@@ -78,9 +75,15 @@ def generate_artifact(prompt, aspect_ratio, high_detail):
     {"Include intricate complex internal glass structures." if high_detail else ""}
     """.strip()
 
-    response = model.generate_content(
-        enhanced_prompt,
-        generation_config={"image_config": {"aspect_ratio": aspect_ratio}}
+    # The new SDK uses a 'config' dictionary that correctly supports 'image_config'
+    response = client.models.generate_content(
+        model='gemini-2.5-flash-image',
+        contents=enhanced_prompt,
+        config={
+            'image_config': {
+                'aspect_ratio': aspect_ratio
+            }
+        }
     )
     
     for part in response.candidates[0].content.parts:
@@ -90,7 +93,7 @@ def generate_artifact(prompt, aspect_ratio, high_detail):
 
 # --- UI LAYOUT ---
 st.sidebar.markdown("<h1 style='color: #00ffff;'>AETHERIS</h1>", unsafe_allow_html=True)
-aspect_ratio = st.sidebar.selectbox("Aspect Ratio", ["1:1", "16:9", "9:16"])
+aspect_ratio = st.sidebar.selectbox("Aspect Ratio", ["1:1", "16:9", "9:16", "4:3", "3:4"])
 high_detail = st.sidebar.checkbox("High Detail Matrix")
 
 st.title("Neural Materialization Lab")
@@ -101,10 +104,13 @@ if prompt := st.chat_input("Describe a mechanical device..."):
 
     with st.chat_message("assistant"):
         with st.status("Materializing artifact...", expanded=True) as status:
-            image_data = generate_artifact(prompt, aspect_ratio, high_detail)
-            if image_data:
-                img = Image.open(io.BytesIO(base64.b64decode(image_data)))
-                st.image(img, use_container_width=True)
-                status.update(label="Materialization Complete", state="complete")
-            else:
-                st.error("Neural link interrupted.")
+            try:
+                image_data = generate_artifact(prompt, aspect_ratio, high_detail)
+                if image_data:
+                    img = Image.open(io.BytesIO(base64.b64decode(image_data)))
+                    st.image(img, use_container_width=True)
+                    status.update(label="Materialization Complete", state="complete")
+                else:
+                    st.error("Neural link interrupted: No image data returned.")
+            except Exception as e:
+                st.error(f"Materialization failed: {str(e)}")
