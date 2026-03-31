@@ -82,7 +82,7 @@ def generate_artifact(prompt, aspect_ratio, high_detail):
     for attempt in range(max_retries + 1):
         try:
             response = client.models.generate_content(
-                model='genai.GenerativeModel('gemini-1.5-flash',
+                model='genai.GenerativeModel('gemini-1.5-flash')',
                 contents=enhanced_prompt,
                 config={
                     'image_config': {
